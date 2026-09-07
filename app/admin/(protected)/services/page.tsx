@@ -1,0 +1,17 @@
+import { createAuthenticatedAdminClient } from "@/lib/supabase/auth";
+import { createService, toggleService, updateService } from "./actions";
+
+const messages: Record<string, string> = { created: "Serviço criado.", updated: "Serviço atualizado.", activated: "Serviço ativado.", deactivated: "Serviço desativado." };
+const errors: Record<string, string> = { validation: "Revise os campos informados.", duplicate: "Já existe um serviço com esse nome.", save: "Não foi possível salvar o serviço." };
+const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+type Props = { searchParams: Promise<{ message?: string; error?: string }> };
+
+function ServiceFields({ service }: { service?: { id: string; name: string; description: string | null; price_cents: number; duration_minutes: number } }) {
+  return <><input name="id" type="hidden" value={service?.id} /><label>Nome<input defaultValue={service?.name} maxLength={100} name="name" required /></label><label>Descrição opcional<textarea defaultValue={service?.description ?? ""} maxLength={500} name="description" /></label><label>Preço (R$)<input defaultValue={service ? (service.price_cents / 100).toFixed(2).replace(".", ",") : ""} inputMode="decimal" name="price" placeholder="35,00" required /></label><label>Duração (min)<input defaultValue={service?.duration_minutes} inputMode="numeric" max="240" min="15" name="duration" required type="number" /></label></>;
+}
+export default async function ServicesPage({ searchParams }: Props) {
+  const supabase = await createAuthenticatedAdminClient(); if (!supabase) return null;
+  const { data: services, error } = await supabase.from("services").select("id,name,description,price_cents,duration_minutes,active").order("active", { ascending: false }).order("name");
+  const query = await searchParams;
+  return <main className="mx-auto w-full max-w-4xl px-4 py-8"><h1 className="text-3xl font-bold">Serviços</h1>{query.message && messages[query.message] ? <p className="mt-4 text-green-300">{messages[query.message]}</p> : null}{query.error && errors[query.error] ? <p className="mt-4 text-red-300">{errors[query.error]}</p> : null}<section className="mt-6 rounded-lg border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Novo serviço</h2><form action={createService} className="admin-form mt-4"><ServiceFields /><button type="submit">Criar serviço</button></form></section><section className="mt-8 space-y-4">{error ? <p className="text-red-300">Não foi possível carregar os serviços.</p> : services?.length ? services.map((service) => <article className="rounded-lg border border-neutral-800 p-5" key={service.id}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold">{service.name}</h2><p className="text-neutral-400">{money.format(service.price_cents / 100)} · {service.duration_minutes} min · {service.active ? "Ativo" : "Inativo"}</p></div><form action={toggleService}><input name="id" type="hidden" value={service.id}/><input name="active" type="hidden" value={String(!service.active)}/><button type="submit">{service.active ? "Desativar" : "Ativar"}</button></form></div><details className="mt-4"><summary>Editar</summary><form action={updateService} className="admin-form mt-4"><ServiceFields service={service}/><button type="submit">Salvar alterações</button></form></details></article>) : <p className="text-neutral-400">Nenhum serviço cadastrado.</p>}</section></main>;
+}
